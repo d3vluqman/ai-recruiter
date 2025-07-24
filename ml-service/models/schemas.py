@@ -116,6 +116,73 @@ class ParsedDocument(BaseModel):
     error_message: Optional[str] = None
 
 
+class SkillMatch(BaseModel):
+    """Individual skill match result"""
+
+    skill_name: str
+    required: bool
+    matched: bool
+    confidence_score: float = Field(ge=0.0, le=1.0)
+    similarity_score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+
+
+class ExperienceMatch(BaseModel):
+    """Experience matching result"""
+
+    total_years: float
+    relevant_years: float
+    required_years: Optional[int] = None
+    experience_score: float = Field(ge=0.0, le=1.0)
+    relevant_positions: List[str] = Field(default_factory=list)
+
+
+class EducationMatch(BaseModel):
+    """Education matching result"""
+
+    degree_match: bool
+    field_match: bool
+    education_score: float = Field(ge=0.0, le=1.0)
+    matched_degrees: List[str] = Field(default_factory=list)
+
+
+class EvaluationResult(BaseModel):
+    """Complete evaluation result for a candidate"""
+
+    candidate_id: Optional[str] = None
+    job_id: Optional[str] = None
+    overall_score: float = Field(ge=0.0, le=100.0)
+    skill_score: float = Field(ge=0.0, le=100.0)
+    experience_score: float = Field(ge=0.0, le=100.0)
+    education_score: float = Field(ge=0.0, le=100.0)
+    skill_matches: List[SkillMatch] = Field(default_factory=list)
+    experience_match: ExperienceMatch = Field(default_factory=ExperienceMatch)
+    education_match: EducationMatch = Field(default_factory=EducationMatch)
+    gap_analysis: List[str] = Field(default_factory=list)
+    recommendations: List[str] = Field(default_factory=list)
+    evaluation_summary: Optional[str] = None
+
+
+class BatchEvaluationRequest(BaseModel):
+    """Request for batch evaluation of multiple candidates"""
+
+    job_requirements: JobRequirements
+    candidates: List[Dict[str, Any]]  # List of candidate data with resume info
+    weights: Optional[Dict[str, float]] = Field(
+        default_factory=lambda: {"skills": 0.4, "experience": 0.4, "education": 0.2}
+    )
+
+
+class BatchEvaluationResult(BaseModel):
+    """Result of batch evaluation"""
+
+    job_id: Optional[str] = None
+    evaluations: List[EvaluationResult] = Field(default_factory=list)
+    total_candidates: int
+    processed_candidates: int
+    failed_candidates: int
+    processing_time_seconds: float
+
+
 class ParseError(BaseModel):
     """Error response model"""
 

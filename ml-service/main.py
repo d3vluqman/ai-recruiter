@@ -9,7 +9,15 @@ import sys
 from services.document_processor import DocumentProcessor
 from services.resume_parser import ResumeParser
 from services.job_parser import JobDescriptionParser
-from models.schemas import ResumeData, JobRequirements, ParsedDocument
+from services.evaluation_engine import EvaluationEngine
+from models.schemas import (
+    ResumeData,
+    JobRequirements,
+    ParsedDocument,
+    EvaluationResult,
+    BatchEvaluationRequest,
+    BatchEvaluationResult,
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -34,6 +42,7 @@ app.add_middleware(
 document_processor = DocumentProcessor()
 resume_parser = ResumeParser()
 job_parser = JobDescriptionParser()
+evaluation_engine = EvaluationEngine()
 
 
 @app.get("/")
@@ -136,3 +145,87 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=8001)
+
+
+@app.post("/evaluate/candidate", response_model=EvaluationResult)
+async def evaluate_candidate(
+    resume_data: ResumeData,
+    job_requirements: JobRequirements,
+    weights: Optional[Dict[str, float]] = None,
+):
+    """
+    Evaluate a single candidate against job requirements
+    """
+    try:
+        evaluation_result = evaluation_engine.evaluate_candidate(
+            resume_data, job_requirements, weights
+        )
+
+        logger.info("Successfully evaluated candidate")
+        return evaluation_result
+
+    except Exception as e:
+        logger.error(f"Error evaluating candidate: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to evaluate candidate: {str(e)}"
+        )
+
+
+@app.post("/evaluate/batch", response_model=BatchEvaluationResult)
+async def batch_evaluate_candidates(request: BatchEvaluationRequest):
+    """
+    Evaluate multiple candidates against job requirements
+    """
+    try:
+        import time
+
+        start_time = time.time()
+
+        evaluations = []
+        processed_count = 0
+        failed_count = 0
+
+        for candidate_data in request.candidates:
+            try:
+                # Extract resume data from candidate
+                resume_data = ResumeData(**candidate_data.get("resume_data", {}))
+
+                # Evaluate candidate
+                evaluation = evaluation_engine.evaluate_candidate(
+                    resume_data, request.job_requirements, request.weights
+                )
+
+                # Set candidate and job IDs if provided
+                evaluation.candidate_id = candidate_data.get("candidate_id")
+                evaluation.job_id = candidate_data.get("job_id")
+
+                evaluations.append(evaluation)
+                processed_count += 1
+
+            except Exception as e:
+                logger.error(
+                    f"Failed to evaluate candidate {candidate_data.get('candidate_id', 'unknown')}: {str(e)}"
+                )
+                failed_count += 1
+
+        processing_time = time.time() - start_time
+
+        result = BatchEvaluationResult(
+            job_id=request.candidates[0].get("job_id") if request.candidates else None,
+            evaluations=evaluations,
+            total_candidates=len(request.candidates),
+            processed_candidates=processed_count,
+            failed_candidates=failed_count,
+            processing_time_seconds=processing_time,
+        )
+
+        logger.info(
+            f"Batch evaluation completed: {processed_count} processed, {failed_count} failed"
+        )
+        return result
+
+    except Exception as e:
+        logger.error(f"Error in batch evaluation: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to perform batch evaluation: {str(e)}"
+        )

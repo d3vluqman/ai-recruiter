@@ -62,6 +62,7 @@ import authRoutes from "./routes/auth";
 import organizationRoutes from "./routes/organizations";
 import jobPostingRoutes from "./routes/jobPostings";
 import resumeRoutes from "./routes/resumes";
+import evaluationRoutes from "./routes/evaluations";
 
 // API routes
 app.get("/api", (req, res) => {
@@ -83,6 +84,9 @@ app.use("/api/job-postings", jobPostingRoutes);
 
 // Resume routes
 app.use("/api/resumes", resumeRoutes);
+
+// Evaluation routes
+app.use("/api/evaluations", evaluationRoutes);
 
 // Error handling middleware (must be last)
 app.use(notFoundHandler);
