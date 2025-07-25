@@ -15,6 +15,10 @@ export const DashboardPage: React.FC = () => {
     navigate('/resumes');
   };
 
+  const handleCandidatesClick = () => {
+    navigate('/candidates');
+  };
+
   return (
     <div className="dashboard-container">
       <div className="dashboard-header">
@@ -43,8 +47,8 @@ export const DashboardPage: React.FC = () => {
             <div className="action-card">
               <h3>Candidates</h3>
               <p>View and evaluate candidates</p>
-              <button className="action-button" disabled>
-                Coming Soon
+              <button className="action-button" onClick={handleCandidatesClick}>
+                Evaluate Candidates
               </button>
             </div>
             <div className="action-card">

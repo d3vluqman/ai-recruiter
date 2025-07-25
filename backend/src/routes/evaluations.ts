@@ -19,6 +19,12 @@ router.get(
   evaluationController.getEvaluationsByJobPosting
 );
 
+// Get candidates with evaluations by job posting
+router.get(
+  "/job/:jobPostingId/candidates",
+  evaluationController.getCandidatesWithEvaluations
+);
+
 // Get evaluation by resume and job posting
 router.get(
   "/resume/:resumeId/job/:jobPostingId",

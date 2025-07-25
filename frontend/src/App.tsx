@@ -5,6 +5,7 @@ import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { JobPostingsPage } from './pages/JobPostingsPage';
 import { ResumesPage } from './pages/ResumesPage';
+import { CandidatesPage } from './pages/CandidatesPage';
 import { ApplicantPortal } from './components/resume/ApplicantPortal';
 import './App.css';
 
@@ -39,6 +40,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <ResumesPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/candidates"
+              element={
+                <ProtectedRoute>
+                  <CandidatesPage />
                 </ProtectedRoute>
               }
             />

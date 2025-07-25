@@ -1,0 +1,166 @@
+import type {
+  Evaluation,
+  EvaluationRequest,
+  BatchEvaluationRequest,
+  BatchEvaluationResult,
+  CandidateWithEvaluation,
+} from "../types/evaluation";
+
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+
+export class EvaluationService {
+  async createEvaluation(
+    data: EvaluationRequest,
+    token: string
+  ): Promise<Evaluation> {
+    const response = await fetch(`${API_BASE_URL}/evaluations`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(
+        errorData.error?.message || "Failed to create evaluation"
+      );
+    }
+
+    return response.json();
+  }
+
+  async getEvaluationById(id: string, token: string): Promise<Evaluation> {
+    const response = await fetch(`${API_BASE_URL}/evaluations/${id}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error?.message || "Failed to fetch evaluation");
+    }
+
+    return response.json();
+  }
+
+  async getEvaluationsByJobPosting(
+    jobPostingId: string,
+    token: string
+  ): Promise<Evaluation[]> {
+    const response = await fetch(
+      `${API_BASE_URL}/evaluations/job/${jobPostingId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(
+        errorData.error?.message || "Failed to fetch evaluations"
+      );
+    }
+
+    return response.json();
+  }
+
+  async getCandidatesWithEvaluations(
+    jobPostingId: string,
+    token: string
+  ): Promise<CandidateWithEvaluation[]> {
+    const response = await fetch(
+      `${API_BASE_URL}/evaluations/job/${jobPostingId}/candidates`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(
+        errorData.error?.message ||
+          "Failed to fetch candidates with evaluations"
+      );
+    }
+
+    return response.json();
+  }
+
+  async batchEvaluate(
+    data: BatchEvaluationRequest,
+    token: string
+  ): Promise<BatchEvaluationResult> {
+    const response = await fetch(`${API_BASE_URL}/evaluations/batch`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(
+        errorData.error?.message || "Failed to perform batch evaluation"
+      );
+    }
+
+    return response.json();
+  }
+
+  async triggerEvaluationForResume(
+    resumeId: string,
+    jobPostingId: string,
+    token: string,
+    weights?: { skills: number; experience: number; education: number }
+  ): Promise<Evaluation> {
+    const response = await fetch(
+      `${API_BASE_URL}/resumes/${resumeId}/evaluate`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ jobPostingId, weights }),
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(
+        errorData.error?.message || "Failed to trigger evaluation"
+      );
+    }
+
+    return response.json();
+  }
+
+  async deleteEvaluation(id: string, token: string): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/evaluations/${id}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(
+        errorData.error?.message || "Failed to delete evaluation"
+      );
+    }
+  }
+}
+
+export const evaluationService = new EvaluationService();

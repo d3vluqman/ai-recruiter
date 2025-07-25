@@ -283,6 +283,82 @@ export class EvaluationService {
     }
   }
 
+  async getCandidatesWithEvaluations(jobPostingId: string): Promise<any[]> {
+    try {
+      // Get all resumes for the job posting with candidate information
+      const { data: resumesData, error: resumesError } = await supabaseAdmin!
+        .from("resumes")
+        .select(
+          `
+          id,
+          candidate_id,
+          file_name,
+          uploaded_at,
+          source,
+          candidates (
+            id,
+            first_name,
+            last_name,
+            email,
+            phone
+          )
+        `
+        )
+        .eq("job_posting_id", jobPostingId);
+
+      if (resumesError) {
+        logger.error("Error fetching resumes with candidates:", resumesError);
+        throw new Error(`Failed to fetch resumes: ${resumesError.message}`);
+      }
+
+      // Get all evaluations for the job posting
+      const { data: evaluationsData, error: evaluationsError } =
+        await supabaseAdmin!
+          .from("evaluations")
+          .select("*")
+          .eq("job_posting_id", jobPostingId);
+
+      if (evaluationsError) {
+        logger.error("Error fetching evaluations:", evaluationsError);
+        throw new Error(
+          `Failed to fetch evaluations: ${evaluationsError.message}`
+        );
+      }
+
+      // Combine the data
+      const candidates = resumesData.map((resume: any) => {
+        const evaluation = evaluationsData.find(
+          (evalData: any) => evalData.resume_id === resume.id
+        );
+
+        return {
+          id: resume.candidates.id,
+          firstName: resume.candidates.first_name,
+          lastName: resume.candidates.last_name,
+          email: resume.candidates.email,
+          phone: resume.candidates.phone,
+          resume: {
+            id: resume.id,
+            fileName: resume.file_name,
+            uploadedAt: new Date(resume.uploaded_at),
+            source: resume.source,
+          },
+          evaluation: evaluation
+            ? this.mapDatabaseToEvaluation(evaluation)
+            : undefined,
+        };
+      });
+
+      return candidates;
+    } catch (error) {
+      logger.error(
+        "EvaluationService.getCandidatesWithEvaluations error:",
+        error
+      );
+      throw error;
+    }
+  }
+
   async deleteEvaluation(id: string): Promise<void> {
     try {
       // Delete skill matches first

@@ -142,6 +142,27 @@ export class EvaluationController {
     }
   }
 
+  async getCandidatesWithEvaluations(req: Request, res: Response) {
+    try {
+      const { jobPostingId } = req.params;
+
+      const candidates = await evaluationService.getCandidatesWithEvaluations(
+        jobPostingId
+      );
+
+      res.json(candidates);
+    } catch (error) {
+      logger.error(
+        "EvaluationController.getCandidatesWithEvaluations error:",
+        error
+      );
+      res.status(500).json({
+        error: "Failed to fetch candidates with evaluations",
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }
+
   async triggerEvaluationForResume(req: Request, res: Response) {
     try {
       const { resumeId } = req.params;
