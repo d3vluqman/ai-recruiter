@@ -125,3 +125,64 @@ export interface BatchEvaluationResult {
   processingTimeSeconds: number;
   evaluations: Evaluation[];
 }
+
+export interface Shortlist {
+  id: string;
+  jobPostingId: string;
+  createdBy: string;
+  selectionCriteria: {
+    topCandidateCount?: number;
+    minimumScore?: number;
+    manualSelection?: boolean;
+    requiredSkills?: string[];
+  };
+  candidateCount: number;
+  status: "draft" | "finalized" | "sent";
+  createdAt: Date;
+}
+
+export interface ShortlistCandidate {
+  id: string;
+  shortlistId: string;
+  candidateId: string;
+  evaluationId: string;
+  selectedManually: boolean;
+  candidate?: Candidate;
+  evaluation?: Evaluation;
+}
+
+export interface EmailCommunication {
+  id: string;
+  shortlistId: string;
+  candidateId: string;
+  emailType: "shortlist_notification" | "interview_invitation" | "rejection";
+  subject: string;
+  body: string;
+  sentAt?: Date;
+  deliveryStatus: "pending" | "sent" | "failed" | "bounced";
+  errorMessage?: string;
+}
+
+export interface CreateShortlistRequest {
+  jobPostingId: string;
+  selectionCriteria: {
+    topCandidateCount?: number;
+    minimumScore?: number;
+    manualSelection?: boolean;
+    requiredSkills?: string[];
+  };
+  manualCandidateIds?: string[];
+}
+
+export interface EmailTemplate {
+  type: "shortlist_notification" | "interview_invitation" | "rejection";
+  subject: string;
+  body: string;
+  variables: string[];
+}
+
+export interface SendEmailRequest {
+  shortlistId: string;
+  emailTemplate: EmailTemplate;
+  candidateIds?: string[];
+}
