@@ -141,12 +141,6 @@ async def parse_job_description_text(text: str):
         )
 
 
-if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run(app, host="0.0.0.0", port=8001)
-
-
 @app.post("/evaluate/candidate", response_model=EvaluationResult)
 async def evaluate_candidate(
     resume_data: ResumeData,
@@ -229,3 +223,9 @@ async def batch_evaluate_candidates(request: BatchEvaluationRequest):
         raise HTTPException(
             status_code=500, detail=f"Failed to perform batch evaluation: {str(e)}"
         )
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(app, host="0.0.0.0", port=8001)
