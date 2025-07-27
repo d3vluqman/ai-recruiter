@@ -7,11 +7,16 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
+import { createServer } from "http";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 import { logger } from "./utils/logger";
 import { testConnection } from "./config/supabase";
+import { initializeWebSocketService } from "./services/websocketService";
+import { healthCheckService } from "./services/healthCheckService";
+import { httpMetricsMiddleware } from "./services/metricsService";
 
-const app = express();
+export const app = express();
+const server = createServer(app);
 const PORT = process.env.PORT || 3001;
 
 // Security middleware
@@ -48,6 +53,9 @@ app.use(
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
+// HTTP metrics middleware (before routes)
+app.use(httpMetricsMiddleware);
+
 // Health check endpoint
 app.get("/health", (req, res) => {
   res.json({
@@ -63,6 +71,8 @@ import organizationRoutes from "./routes/organizations";
 import jobPostingRoutes from "./routes/jobPostings";
 import resumeRoutes from "./routes/resumes";
 import evaluationRoutes from "./routes/evaluations";
+import shortlistRoutes from "./routes/shortlists";
+import monitoringRoutes from "./routes/monitoring";
 
 // API routes
 app.get("/api", (req, res) => {
@@ -88,6 +98,12 @@ app.use("/api/resumes", resumeRoutes);
 // Evaluation routes
 app.use("/api/evaluations", evaluationRoutes);
 
+// Shortlist routes
+app.use("/api/shortlists", shortlistRoutes);
+
+// Monitoring routes
+app.use("/api/monitoring", monitoringRoutes);
+
 // Error handling middleware (must be last)
 app.use(notFoundHandler);
 app.use(errorHandler);
@@ -101,10 +117,22 @@ const startServer = async () => {
       logger.warn("Database connection failed, but starting server anyway");
     }
 
-    app.listen(PORT, () => {
+    // Initialize WebSocket service
+    const websocketService = initializeWebSocketService(server);
+    logger.info("WebSocket service initialized");
+
+    // Initialize monitoring services
+    healthCheckService.startPeriodicHealthChecks(30000); // Every 30 seconds
+    logger.info("Health check service initialized");
+
+    server.listen(PORT, () => {
       logger.info(`Server running on port ${PORT}`);
       logger.info(`Environment: ${process.env.NODE_ENV || "development"}`);
       logger.info(`Health check: http://localhost:${PORT}/health`);
+      logger.info(
+        `Monitoring endpoints: http://localhost:${PORT}/api/monitoring/health`
+      );
+      logger.info(`WebSocket server ready for connections`);
     });
   } catch (error) {
     logger.error("Failed to start server:", error);
