@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { resumeController, upload } from "../controllers/resumeController";
+import { evaluationController } from "../controllers/evaluationController";
 import { authenticateToken } from "../middleware/auth";
 
 const router = Router();
@@ -22,6 +23,11 @@ router.put(
   resumeController.updateResumeStatus
 );
 router.post("/:id/process", authenticateToken, resumeController.processResume);
+router.post(
+  "/:id/evaluate",
+  authenticateToken,
+  evaluationController.triggerEvaluationForResume
+);
 router.post(
   "/batch-process",
   authenticateToken,

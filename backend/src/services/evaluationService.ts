@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "../config/supabase";
+import { supabase } from "../config/supabase";
 import {
   Evaluation,
   EvaluationRequest,
@@ -11,13 +11,83 @@ import {
 import { logger } from "../utils/logger";
 import { resumeService } from "./resumeService";
 import { jobPostingService } from "./jobPostingService";
-import axios from "axios";
+import { mlServiceClient, MLServiceClient } from "./mlServiceClient";
+import { jobQueue } from "./jobQueue";
+import { mlServiceFallbackHandler } from "../middleware/mlServiceFallback";
+import { cacheService } from "./cacheService";
 
 export class EvaluationService {
-  private mlServiceUrl: string;
-
   constructor() {
-    this.mlServiceUrl = process.env.ML_SERVICE_URL || "http://localhost:8001";
+    // Set up job queue event handlers
+    this.setupJobQueueHandlers();
+  }
+
+  private setupJobQueueHandlers(): void {
+    // Handle evaluation jobs
+    jobQueue.on("processJob", async (job, resolve, reject) => {
+      try {
+        if (job.type === "single_evaluation") {
+          const result = await this.processSingleEvaluationJob(job.data);
+          resolve(result);
+        } else if (job.type === "batch_evaluation") {
+          const result = await this.processBatchEvaluationJob(job.data);
+          resolve(result);
+        } else {
+          reject(new Error(`Unknown job type: ${job.type}`));
+        }
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  async createEvaluationAsync(
+    evaluationData: EvaluationRequest
+  ): Promise<string> {
+    // Add job to queue for async processing
+    const jobId = await jobQueue.addJob("single_evaluation", evaluationData);
+    logger.info(
+      `Evaluation job ${jobId} queued for resume ${evaluationData.resumeId}`
+    );
+    return jobId;
+  }
+
+  async batchEvaluateAsync(request: BatchEvaluationRequest): Promise<string> {
+    // Add job to queue for async processing
+    const jobId = await jobQueue.addJob("batch_evaluation", request);
+    logger.info(
+      `Batch evaluation job ${jobId} queued for job posting ${request.jobPostingId}`
+    );
+    return jobId;
+  }
+
+  async getEvaluationJobStatus(jobId: string): Promise<any> {
+    const job = jobQueue.getJob(jobId);
+    if (!job) {
+      return null;
+    }
+
+    return {
+      id: job.id,
+      type: job.type,
+      status: job.status,
+      createdAt: job.createdAt,
+      startedAt: job.startedAt,
+      completedAt: job.completedAt,
+      error: job.error,
+      result: job.result,
+      retryCount: job.retryCount,
+      maxRetries: job.maxRetries,
+    };
+  }
+
+  async checkMLServiceHealth(): Promise<boolean> {
+    try {
+      return await mlServiceClient.healthCheck();
+    } catch (error) {
+      logger.error("ML service health check failed:", error);
+      return false;
+    }
   }
 
   async createEvaluation(
@@ -45,7 +115,7 @@ export class EvaluationService {
       );
 
       // Store evaluation in database
-      const { data, error } = await supabaseAdmin!
+      const { data, error } = await supabase
         .from("evaluations")
         .insert({
           resume_id: evaluationData.resumeId,
@@ -79,6 +149,12 @@ export class EvaluationService {
         await this.storeSkillMatches(evaluation.id, mlResult.skill_matches);
       }
 
+      // Invalidate related cache entries
+      await this.invalidateEvaluationCache(
+        evaluationData.jobPostingId,
+        evaluation.id
+      );
+
       return evaluation;
     } catch (error) {
       logger.error("EvaluationService.createEvaluation error:", error);
@@ -88,7 +164,16 @@ export class EvaluationService {
 
   async getEvaluationById(id: string): Promise<Evaluation | null> {
     try {
-      const { data, error } = await supabaseAdmin!
+      // Try to get from cache first
+      const cacheKey = `evaluation:${id}`;
+      const cachedEvaluation = await cacheService.get<Evaluation>(cacheKey);
+
+      if (cachedEvaluation) {
+        logger.debug(`Cache hit for evaluation ${id}`);
+        return cachedEvaluation;
+      }
+
+      const { data, error } = await supabase
         .from("evaluations")
         .select("*")
         .eq("id", id)
@@ -102,7 +187,12 @@ export class EvaluationService {
         throw new Error(`Failed to fetch evaluation: ${error.message}`);
       }
 
-      return this.mapDatabaseToEvaluation(data);
+      const evaluation = this.mapDatabaseToEvaluation(data);
+
+      // Cache the result for 1 hour
+      await cacheService.set(cacheKey, evaluation, { ttl: 3600 });
+
+      return evaluation;
     } catch (error) {
       logger.error("EvaluationService.getEvaluationById error:", error);
       throw error;
@@ -110,21 +200,68 @@ export class EvaluationService {
   }
 
   async getEvaluationsByJobPosting(
-    jobPostingId: string
-  ): Promise<Evaluation[]> {
+    jobPostingId: string,
+    options?: { page?: number; limit?: number; useCache?: boolean }
+  ): Promise<{ evaluations: Evaluation[]; total: number; hasMore: boolean }> {
     try {
-      const { data, error } = await supabaseAdmin!
+      const page = options?.page || 1;
+      const limit = options?.limit || 50;
+      const useCache = options?.useCache !== false;
+      const offset = (page - 1) * limit;
+
+      // Try cache first if enabled
+      const cacheKey = `evaluations:job:${jobPostingId}:page:${page}:limit:${limit}`;
+      if (useCache) {
+        const cached = await cacheService.get<{
+          evaluations: Evaluation[];
+          total: number;
+          hasMore: boolean;
+        }>(cacheKey);
+        if (cached) {
+          logger.debug(
+            `Cache hit for evaluations job ${jobPostingId} page ${page}`
+          );
+          return cached;
+        }
+      }
+
+      // Get total count
+      const { count, error: countError } = await supabase
+        .from("evaluations")
+        .select("*", { count: "exact", head: true })
+        .eq("job_posting_id", jobPostingId);
+
+      if (countError) {
+        logger.error("Error counting evaluations:", countError);
+        throw new Error(`Failed to count evaluations: ${countError.message}`);
+      }
+
+      const total = count || 0;
+
+      // Get paginated data
+      const { data, error } = await supabase
         .from("evaluations")
         .select("*")
         .eq("job_posting_id", jobPostingId)
-        .order("overall_score", { ascending: false });
+        .order("overall_score", { ascending: false })
+        .range(offset, offset + limit - 1);
 
       if (error) {
         logger.error("Error fetching evaluations by job posting:", error);
         throw new Error(`Failed to fetch evaluations: ${error.message}`);
       }
 
-      return data.map(this.mapDatabaseToEvaluation);
+      const evaluations = data.map(this.mapDatabaseToEvaluation);
+      const hasMore = offset + limit < total;
+
+      const result = { evaluations, total, hasMore };
+
+      // Cache the result for 30 minutes
+      if (useCache) {
+        await cacheService.set(cacheKey, result, { ttl: 1800 });
+      }
+
+      return result;
     } catch (error) {
       logger.error(
         "EvaluationService.getEvaluationsByJobPosting error:",
@@ -139,7 +276,7 @@ export class EvaluationService {
     jobPostingId: string
   ): Promise<Evaluation | null> {
     try {
-      const { data, error } = await supabaseAdmin!
+      const { data, error } = await supabase
         .from("evaluations")
         .select("*")
         .eq("resume_id", resumeId)
@@ -286,7 +423,7 @@ export class EvaluationService {
   async getCandidatesWithEvaluations(jobPostingId: string): Promise<any[]> {
     try {
       // Get all resumes for the job posting with candidate information
-      const { data: resumesData, error: resumesError } = await supabaseAdmin!
+      const { data: resumesData, error: resumesError } = await supabase
         .from("resumes")
         .select(
           `
@@ -312,11 +449,10 @@ export class EvaluationService {
       }
 
       // Get all evaluations for the job posting
-      const { data: evaluationsData, error: evaluationsError } =
-        await supabaseAdmin!
-          .from("evaluations")
-          .select("*")
-          .eq("job_posting_id", jobPostingId);
+      const { data: evaluationsData, error: evaluationsError } = await supabase
+        .from("evaluations")
+        .select("*")
+        .eq("job_posting_id", jobPostingId);
 
       if (evaluationsError) {
         logger.error("Error fetching evaluations:", evaluationsError);
@@ -362,13 +498,10 @@ export class EvaluationService {
   async deleteEvaluation(id: string): Promise<void> {
     try {
       // Delete skill matches first
-      await supabaseAdmin!
-        .from("skill_matches")
-        .delete()
-        .eq("evaluation_id", id);
+      await supabase.from("skill_matches").delete().eq("evaluation_id", id);
 
       // Delete evaluation
-      const { error } = await supabaseAdmin!
+      const { error } = await supabase
         .from("evaluations")
         .delete()
         .eq("id", id);
@@ -383,28 +516,64 @@ export class EvaluationService {
     }
   }
 
+  private async processSingleEvaluationJob(
+    evaluationData: EvaluationRequest
+  ): Promise<Evaluation> {
+    return await this.createEvaluation(evaluationData);
+  }
+
+  private async processBatchEvaluationJob(
+    request: BatchEvaluationRequest
+  ): Promise<BatchEvaluationResult> {
+    return await this.batchEvaluate(request);
+  }
+
   private async callMLEvaluationService(
     resume: Resume,
     jobPosting: JobPosting,
     weights?: { skills: number; experience: number; education: number }
   ): Promise<any> {
     try {
-      const response = await axios.post(
-        `${this.mlServiceUrl}/evaluate/candidate`,
-        {
-          resume_data: resume.parsedData || {},
-          job_requirements: jobPosting.parsedRequirements || {
-            title: jobPosting.title,
-            description: jobPosting.description,
-            required_skills: jobPosting.requirements || [],
-          },
-          weights,
-        }
+      // Check if ML service is healthy
+      const isHealthy = await mlServiceFallbackHandler.checkServiceHealth();
+
+      if (!isHealthy && mlServiceFallbackHandler.shouldUseFallback()) {
+        logger.warn("ML service unavailable, using fallback evaluation");
+        const resumeData = MLServiceClient.convertResumeToMLFormat(resume);
+        const jobRequirements =
+          MLServiceClient.convertJobPostingToMLFormat(jobPosting);
+        return mlServiceFallbackHandler.generateFallbackEvaluation(
+          resumeData,
+          jobRequirements
+        );
+      }
+
+      const resumeData = MLServiceClient.convertResumeToMLFormat(resume);
+      const jobRequirements =
+        MLServiceClient.convertJobPostingToMLFormat(jobPosting);
+
+      const result = await mlServiceClient.evaluateCandidate(
+        resumeData,
+        jobRequirements,
+        weights
       );
 
-      return response.data;
+      return result;
     } catch (error) {
       logger.error("ML service evaluation call failed:", error);
+
+      // Try fallback if enabled
+      if (mlServiceFallbackHandler.shouldUseFallback()) {
+        logger.warn("Using fallback evaluation due to ML service error");
+        const resumeData = MLServiceClient.convertResumeToMLFormat(resume);
+        const jobRequirements =
+          MLServiceClient.convertJobPostingToMLFormat(jobPosting);
+        return mlServiceFallbackHandler.generateFallbackEvaluation(
+          resumeData,
+          jobRequirements
+        );
+      }
+
       throw new Error("Failed to evaluate candidate using ML service");
     }
   }
@@ -415,19 +584,52 @@ export class EvaluationService {
     weights?: { skills: number; experience: number; education: number }
   ): Promise<any> {
     try {
-      const response = await axios.post(`${this.mlServiceUrl}/evaluate/batch`, {
-        job_requirements: jobPosting.parsedRequirements || {
-          title: jobPosting.title,
-          description: jobPosting.description,
-          required_skills: jobPosting.requirements || [],
-        },
-        candidates: candidatesData,
-        weights,
-      });
+      // Check if ML service is healthy
+      const isHealthy = await mlServiceFallbackHandler.checkServiceHealth();
 
-      return response.data;
+      if (!isHealthy && mlServiceFallbackHandler.shouldUseFallback()) {
+        logger.warn("ML service unavailable, using fallback batch evaluation");
+        const jobRequirements =
+          MLServiceClient.convertJobPostingToMLFormat(jobPosting);
+        return mlServiceFallbackHandler.generateFallbackBatchEvaluation(
+          candidatesData,
+          jobRequirements
+        );
+      }
+
+      const jobRequirements =
+        MLServiceClient.convertJobPostingToMLFormat(jobPosting);
+
+      const batchRequest = {
+        job_requirements: jobRequirements,
+        candidates: candidatesData.map((candidate) => ({
+          candidate_id: candidate.candidate_id,
+          job_id: candidate.job_id,
+          resume_data: MLServiceClient.convertResumeToMLFormat({
+            parsedData: candidate.resume_data,
+          } as Resume),
+        })),
+        weights,
+      };
+
+      const result = await mlServiceClient.batchEvaluateCandidates(
+        batchRequest
+      );
+      return result;
     } catch (error) {
       logger.error("ML service batch evaluation call failed:", error);
+
+      // Try fallback if enabled
+      if (mlServiceFallbackHandler.shouldUseFallback()) {
+        logger.warn("Using fallback batch evaluation due to ML service error");
+        const jobRequirements =
+          MLServiceClient.convertJobPostingToMLFormat(jobPosting);
+        return mlServiceFallbackHandler.generateFallbackBatchEvaluation(
+          candidatesData,
+          jobRequirements
+        );
+      }
+
       throw new Error("Failed to perform batch evaluation using ML service");
     }
   }
@@ -438,7 +640,7 @@ export class EvaluationService {
     mlResult: any
   ): Promise<Evaluation> {
     try {
-      const { data, error } = await supabaseAdmin!
+      const { data, error } = await supabase
         .from("evaluations")
         .insert({
           resume_id: resumeId,
@@ -491,7 +693,7 @@ export class EvaluationService {
         confidence_score: sm.confidence_score,
       }));
 
-      const { error } = await supabaseAdmin!
+      const { error } = await supabase
         .from("skill_matches")
         .insert(skillMatchData);
 
@@ -501,6 +703,28 @@ export class EvaluationService {
       }
     } catch (error) {
       logger.error("Error in storeSkillMatches:", error);
+    }
+  }
+
+  private async invalidateEvaluationCache(
+    jobPostingId: string,
+    evaluationId: string
+  ): Promise<void> {
+    try {
+      // Invalidate specific evaluation cache
+      await cacheService.del(`evaluation:${evaluationId}`);
+
+      // Invalidate job posting evaluations cache (all pages)
+      await cacheService.invalidatePattern(`evaluations:job:${jobPostingId}:*`);
+
+      // Invalidate candidates with evaluations cache
+      await cacheService.del(`candidates:job:${jobPostingId}`);
+
+      logger.debug(
+        `Cache invalidated for evaluation ${evaluationId} and job ${jobPostingId}`
+      );
+    } catch (error) {
+      logger.error("Error invalidating evaluation cache:", error);
     }
   }
 

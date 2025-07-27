@@ -161,7 +161,8 @@ export const EvaluationDetails: React.FC<EvaluationDetailsProps> = ({
               </div>
             )}
           </div>
-          {evaluation.evaluationDetails.experienceMatch.relevantPositions.length > 0 && (
+          {evaluation.evaluationDetails.experienceMatch.relevantPositions && 
+           evaluation.evaluationDetails.experienceMatch.relevantPositions.length > 0 && (
             <div className="relevant-positions">
               <h5>Relevant Positions</h5>
               <ul>
@@ -197,7 +198,8 @@ export const EvaluationDetails: React.FC<EvaluationDetailsProps> = ({
               </span>
             </div>
           </div>
-          {evaluation.evaluationDetails.educationMatch.matchedDegrees.length > 0 && (
+          {evaluation.evaluationDetails.educationMatch.matchedDegrees && 
+           evaluation.evaluationDetails.educationMatch.matchedDegrees.length > 0 && (
             <div className="matched-degrees">
               <h5>Matched Degrees</h5>
               <ul>
@@ -212,7 +214,8 @@ export const EvaluationDetails: React.FC<EvaluationDetailsProps> = ({
         </div>
       </div>
 
-      {evaluation.evaluationDetails.gapAnalysis.length > 0 && (
+      {evaluation.evaluationDetails.gapAnalysis && 
+       evaluation.evaluationDetails.gapAnalysis.length > 0 && (
         <div className="evaluation-section">
           <h4>Gap Analysis</h4>
           <ul className="gap-analysis">
@@ -225,7 +228,8 @@ export const EvaluationDetails: React.FC<EvaluationDetailsProps> = ({
         </div>
       )}
 
-      {evaluation.evaluationDetails.recommendations.length > 0 && (
+      {evaluation.evaluationDetails.recommendations && 
+       evaluation.evaluationDetails.recommendations.length > 0 && (
         <div className="evaluation-section">
           <h4>Recommendations</h4>
           <ul className="recommendations">
