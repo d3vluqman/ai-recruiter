@@ -3,6 +3,7 @@ import { JobPostingForm } from '../components/jobPosting/JobPostingForm';
 import { JobPostingList } from '../components/jobPosting/JobPostingList';
 import { jobPostingService } from '../services/jobPostingService';
 import type { JobPosting, CreateJobPostingData, UpdateJobPostingData } from '../types/jobPosting';
+import { ErrorHandler, NotificationService } from '../utils/errorHandler';
 import '../styles/jobPosting.css';
 
 type ViewMode = 'list' | 'create' | 'edit' | 'view';
@@ -25,8 +26,8 @@ export const JobPostingsPage: React.FC = () => {
       const jobs = await jobPostingService.getMyJobPostings();
       setJobPostings(jobs);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load job postings');
-      console.error('Error loading job postings:', err);
+      const appError = ErrorHandler.handleApiError(err, 'Load job postings');
+      setError(appError.message);
     } finally {
       setIsLoading(false);
     }
@@ -74,8 +75,8 @@ export const JobPostingsPage: React.FC = () => {
       setJobPostings(prev => prev.filter(job => job.id !== id));
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete job posting');
-      console.error('Error deleting job posting:', err);
+      const appError = ErrorHandler.handleApiError(err, 'Delete job posting');
+      setError(appError.message);
     } finally {
       setIsLoading(false);
     }

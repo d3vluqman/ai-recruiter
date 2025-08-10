@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { AuthContextType, User, LoginRequest, RegisterRequest } from '../types/auth';
 import { authService } from '../services/authService';
+import { ErrorHandler } from '../utils/errorHandler';
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -27,13 +28,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setToken(storedToken);
           setUser(parsedUser);
         } catch (error) {
-          console.error('Error parsing stored user data:', error);
+          ErrorHandler.logError(error, 'Auth initialization - parsing stored user data');
           localStorage.removeItem('auth_token');
           localStorage.removeItem('auth_user');
         }
       }
     } catch (error) {
-      console.error('Auth initialization error:', error);
+      ErrorHandler.logError(error, 'Auth initialization');
     } finally {
       setIsLoading(false);
     }
@@ -51,7 +52,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setToken(response.token);
       setUser(response.user);
     } catch (error) {
-      console.error('Login error:', error);
+      ErrorHandler.logError(error, 'User login');
       throw error;
     } finally {
       setIsLoading(false);
@@ -70,7 +71,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setToken(response.token);
       setUser(response.user);
     } catch (error) {
-      console.error('Registration error:', error);
+      ErrorHandler.logError(error, 'User registration');
       throw error;
     } finally {
       setIsLoading(false);
@@ -88,7 +89,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // Optional: Call logout endpoint
     if (token) {
       authService.logout(token).catch(error => {
-        console.error('Logout API call failed:', error);
+        ErrorHandler.logError(error, 'Logout API call');
       });
     }
   };
@@ -105,7 +106,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       localStorage.setItem('auth_user', JSON.stringify(updatedUser));
       setUser(updatedUser);
     } catch (error) {
-      console.error('Profile update error:', error);
+      ErrorHandler.logError(error, 'Profile update');
       throw error;
     }
   };

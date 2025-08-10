@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import type { Organization } from '../../types/auth';
+import { ErrorHandler } from '../../utils/errorHandler';
 import { authService } from '../../services/authService';
 
 export const UserProfile: React.FC = () => {
@@ -27,7 +28,7 @@ export const UserProfile: React.FC = () => {
         const orgs = await authService.getOrganizations(token);
         setOrganizations(orgs);
       } catch (err) {
-        console.error('Failed to load organizations:', err);
+        ErrorHandler.logError(err, 'Load organizations for user profile');
       } finally {
         setLoadingOrgs(false);
       }

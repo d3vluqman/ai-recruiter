@@ -164,16 +164,23 @@ export const CandidatesPage: React.FC = () => {
         .candidates-page {
           min-height: 100vh;
           background: #f8f9fa;
+          width: 100%;
+          max-width: 100%;
+          overflow-x: hidden;
+          box-sizing: border-box;
         }
 
         .candidates-header {
           display: flex;
           justify-content: space-between;
           align-items: flex-start;
-          padding: 2rem 2rem 1rem 2rem;
+          padding: 2rem;
           background: white;
           border-bottom: 1px solid #e9ecef;
           gap: 2rem;
+          width: 100%;
+          max-width: 100vw;
+          box-sizing: border-box;
         }
 
         .header-content {

@@ -200,3 +200,8 @@ celerybeat-schedule
 .mypy_cache/
 .dmypy.json
 dmypy.json
+
+# docs
+ML_SERVICE_DETAILED_DOCUMENTATION.md
+SYSTEM_ARCHITECTURE.md
+thesis-development-of-intelligent-job-applicant-evaluation-system.md

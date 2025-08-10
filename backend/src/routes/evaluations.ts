@@ -48,6 +48,9 @@ router.post(
   evaluationController.triggerEvaluationForResume
 );
 
+// Re-evaluate existing evaluation
+router.post("/re-evaluate/:id", evaluationController.reEvaluateExisting);
+
 // Delete evaluation
 router.delete("/:id", evaluationController.deleteEvaluation);
 

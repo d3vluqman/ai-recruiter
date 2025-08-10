@@ -1,4 +1,5 @@
 import { io, Socket } from "socket.io-client";
+import { ErrorHandler } from "../utils/errorHandler";
 
 export interface JobStatus {
   jobId: string;
@@ -57,7 +58,8 @@ export class WebSocketService {
       return;
     }
 
-    const serverUrl = import.meta.env.VITE_API_URL || "http://localhost:3001";
+    const serverUrl =
+      import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
 
     this.socket = io(serverUrl, {
       transports: ["websocket", "polling"],
@@ -79,12 +81,16 @@ export class WebSocketService {
     if (!this.socket) return;
 
     this.socket.on("connect", () => {
-      console.log("WebSocket connected");
+      if (import.meta.env.DEV) {
+        console.log("WebSocket connected");
+      }
       this.reconnectAttempts = 0;
     });
 
     this.socket.on("disconnect", (reason) => {
-      console.log("WebSocket disconnected:", reason);
+      if (import.meta.env.DEV) {
+        console.log("WebSocket disconnected:", reason);
+      }
 
       if (reason === "io server disconnect") {
         // Server initiated disconnect, don't reconnect
@@ -102,7 +108,7 @@ export class WebSocketService {
     });
 
     this.socket.on("connect_error", (error) => {
-      console.error("WebSocket connection error:", error);
+      ErrorHandler.logError(error, "WebSocket connection");
     });
   }
 

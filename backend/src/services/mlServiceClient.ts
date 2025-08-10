@@ -1,6 +1,7 @@
 import axios, { AxiosInstance, AxiosResponse } from "axios";
 import { logger } from "../utils/logger";
 import { Resume, JobPosting } from "../types";
+import { geminiService } from "./geminiService";
 
 export interface MLServiceConfig {
   baseUrl: string;
@@ -225,6 +226,31 @@ export class MLServiceClient {
     }
   }
 
+  // NEW: Hybrid method using Gemini for parsing
+  async parseResumeTextWithGemini(text: string): Promise<MLResumeData> {
+    try {
+      logger.info("Using Gemini for resume parsing");
+      const parsedData = await geminiService.parseResume(text);
+
+      // Convert Gemini response to ML service format
+      return {
+        personal_info: parsedData.personal_info,
+        skills: parsedData.skills || [],
+        experience: parsedData.experience || [],
+        education: parsedData.education || [],
+        certifications: parsedData.certifications || [],
+        languages: parsedData.languages || [],
+        summary: parsedData.summary,
+        total_experience_years: parsedData.total_experience_years,
+      };
+    } catch (error) {
+      logger.error("Failed to parse resume with Gemini:", error);
+      // Fallback to original ML service
+      logger.info("Falling back to original ML service for resume parsing");
+      return this.parseResumeText(text);
+    }
+  }
+
   async parseJobDescriptionFile(
     file: Buffer,
     filename: string
@@ -270,12 +296,57 @@ export class MLServiceClient {
     }
   }
 
+  // NEW: Hybrid method using Gemini for job description parsing
+  async parseJobDescriptionTextWithGemini(
+    text: string
+  ): Promise<MLJobRequirements> {
+    try {
+      logger.info("Using Gemini for job description parsing");
+      const parsedData = await geminiService.parseJobDescription(text);
+
+      // Convert Gemini response to ML service format
+      return {
+        title: parsedData.title,
+        company: parsedData.company,
+        location: parsedData.location,
+        department: parsedData.department,
+        employment_type: parsedData.employment_type,
+        experience_level: parsedData.experience_level,
+        required_skills: parsedData.required_skills || [],
+        preferred_skills: parsedData.preferred_skills || [],
+        required_experience_years: parsedData.required_experience_years,
+        required_education: parsedData.required_education || [],
+        certifications: parsedData.certifications || [],
+        responsibilities: parsedData.responsibilities || [],
+        qualifications: parsedData.qualifications || [],
+        benefits: parsedData.benefits || [],
+        salary_range: parsedData.salary_range,
+        description: parsedData.description,
+      };
+    } catch (error) {
+      logger.error("Failed to parse job description with Gemini:", error);
+      // Fallback to original ML service
+      logger.info(
+        "Falling back to original ML service for job description parsing"
+      );
+      return this.parseJobDescriptionText(text);
+    }
+  }
+
   async evaluateCandidate(
     resumeData: MLResumeData,
     jobRequirements: MLJobRequirements,
     weights?: { skills: number; experience: number; education: number }
   ): Promise<MLEvaluationResult> {
     try {
+      // Debug logging for job requirements
+      logger.info("DEBUG: Job requirements being sent to ML service:", {
+        required_experience_years: jobRequirements.required_experience_years,
+        required_education: jobRequirements.required_education,
+        required_skills_count: jobRequirements.required_skills?.length || 0,
+        preferred_skills_count: jobRequirements.preferred_skills?.length || 0,
+      });
+
       const response = await this.retryRequest(() =>
         this.client.post("/evaluate/candidate", {
           resume_data: resumeData,

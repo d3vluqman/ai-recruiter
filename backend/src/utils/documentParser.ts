@@ -1,6 +1,7 @@
 import fs from "fs/promises";
 import path from "path";
 import { logger } from "./logger";
+import pdfParse from "pdf-parse";
 
 export interface ParsedResumeData {
   text: string;
@@ -125,14 +126,23 @@ export class DocumentParser {
   }
 
   private async parsePdfFile(filePath: string): Promise<string> {
-    // For now, return a placeholder. In a real implementation, you would use
-    // a library like pdf-parse or pdf2pic to extract text from PDFs
-    logger.warn(
-      "PDF parsing not fully implemented, returning placeholder text"
-    );
-    return `[PDF content from ${path.basename(
-      filePath
-    )} - PDF parsing requires additional libraries]`;
+    try {
+      const dataBuffer = await fs.readFile(filePath);
+      const data = await pdfParse(dataBuffer);
+      logger.info(
+        `Successfully extracted ${
+          data.text.length
+        } characters from PDF: ${path.basename(filePath)}`
+      );
+      return data.text;
+    } catch (error) {
+      logger.error(`Error parsing PDF file ${filePath}:`, error);
+      throw new Error(
+        `Failed to parse PDF: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
+    }
   }
 
   private async parseDocFile(filePath: string): Promise<string> {

@@ -1,5 +1,8 @@
 import { supabase } from "../config/supabase";
 
+const API_BASE_URL =
+  (import.meta.env.VITE_API_BASE_URL || "http://localhost:3001") + "/api";
+
 export interface Shortlist {
   id: string;
   jobPostingId: string;
@@ -88,14 +91,11 @@ class ShortlistService {
   async createShortlist(request: CreateShortlistRequest): Promise<Shortlist> {
     const headers = await this.getAuthHeaders();
 
-    const response = await fetch(
-      `${import.meta.env.VITE_API_URL}/api/shortlists`,
-      {
-        method: "POST",
-        headers,
-        body: JSON.stringify(request),
-      }
-    );
+    const response = await fetch(`${API_BASE_URL}/shortlists`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(request),
+    });
 
     if (!response.ok) {
       const error = await response.json();
@@ -109,13 +109,10 @@ class ShortlistService {
   async getShortlistsByJob(jobId: string): Promise<Shortlist[]> {
     const headers = await this.getAuthHeaders();
 
-    const response = await fetch(
-      `${import.meta.env.VITE_API_URL}/api/shortlists/job/${jobId}`,
-      {
-        method: "GET",
-        headers,
-      }
-    );
+    const response = await fetch(`${API_BASE_URL}/shortlists/job/${jobId}`, {
+      method: "GET",
+      headers,
+    });
 
     if (!response.ok) {
       const error = await response.json();
@@ -129,13 +126,10 @@ class ShortlistService {
   async getShortlistById(shortlistId: string): Promise<Shortlist> {
     const headers = await this.getAuthHeaders();
 
-    const response = await fetch(
-      `${import.meta.env.VITE_API_URL}/api/shortlists/${shortlistId}`,
-      {
-        method: "GET",
-        headers,
-      }
-    );
+    const response = await fetch(`${API_BASE_URL}/shortlists/${shortlistId}`, {
+      method: "GET",
+      headers,
+    });
 
     if (!response.ok) {
       const error = await response.json();
@@ -152,9 +146,7 @@ class ShortlistService {
     const headers = await this.getAuthHeaders();
 
     const response = await fetch(
-      `${
-        import.meta.env.VITE_API_URL
-      }/api/shortlists/${shortlistId}/candidates`,
+      `${API_BASE_URL}/shortlists/${shortlistId}/candidates`,
       {
         method: "GET",
         headers,
@@ -177,7 +169,7 @@ class ShortlistService {
     const headers = await this.getAuthHeaders();
 
     const response = await fetch(
-      `${import.meta.env.VITE_API_URL}/api/shortlists/${shortlistId}/status`,
+      `${API_BASE_URL}/shortlists/${shortlistId}/status`,
       {
         method: "PATCH",
         headers,
@@ -199,9 +191,7 @@ class ShortlistService {
     const headers = await this.getAuthHeaders();
 
     const response = await fetch(
-      `${
-        import.meta.env.VITE_API_URL
-      }/api/shortlists/${shortlistId}/candidates`,
+      `${API_BASE_URL}/shortlists/${shortlistId}/candidates`,
       {
         method: "POST",
         headers,
@@ -222,9 +212,7 @@ class ShortlistService {
     const headers = await this.getAuthHeaders();
 
     const response = await fetch(
-      `${
-        import.meta.env.VITE_API_URL
-      }/api/shortlists/${shortlistId}/candidates/${candidateId}`,
+      `${API_BASE_URL}/shortlists/${shortlistId}/candidates/${candidateId}`,
       {
         method: "DELETE",
         headers,
@@ -245,9 +233,7 @@ class ShortlistService {
     const headers = await this.getAuthHeaders();
 
     const response = await fetch(
-      `${import.meta.env.VITE_API_URL}/api/shortlists/${
-        request.shortlistId
-      }/emails`,
+      `${API_BASE_URL}/shortlists/${request.shortlistId}/emails`,
       {
         method: "POST",
         headers,
@@ -270,7 +256,7 @@ class ShortlistService {
     const headers = await this.getAuthHeaders();
 
     const response = await fetch(
-      `${import.meta.env.VITE_API_URL}/api/shortlists/${shortlistId}/emails`,
+      `${API_BASE_URL}/shortlists/${shortlistId}/emails`,
       {
         method: "GET",
         headers,
@@ -289,13 +275,10 @@ class ShortlistService {
   async getEmailTemplates(): Promise<EmailTemplate[]> {
     const headers = await this.getAuthHeaders();
 
-    const response = await fetch(
-      `${import.meta.env.VITE_API_URL}/api/shortlists/templates/all`,
-      {
-        method: "GET",
-        headers,
-      }
-    );
+    const response = await fetch(`${API_BASE_URL}/shortlists/templates/all`, {
+      method: "GET",
+      headers,
+    });
 
     if (!response.ok) {
       const error = await response.json();
@@ -310,7 +293,7 @@ class ShortlistService {
     const headers = await this.getAuthHeaders();
 
     const response = await fetch(
-      `${import.meta.env.VITE_API_URL}/api/shortlists/templates/${type}`,
+      `${API_BASE_URL}/shortlists/templates/${type}`,
       {
         method: "GET",
         headers,
@@ -333,7 +316,7 @@ class ShortlistService {
     const headers = await this.getAuthHeaders();
 
     const response = await fetch(
-      `${import.meta.env.VITE_API_URL}/api/shortlists/templates/${type}`,
+      `${API_BASE_URL}/shortlists/templates/${type}`,
       {
         method: "PUT",
         headers,

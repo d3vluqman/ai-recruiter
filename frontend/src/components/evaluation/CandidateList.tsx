@@ -5,6 +5,7 @@ import { LoadingSpinner } from '../common/LoadingSpinner';
 import { evaluationService } from '../../services/evaluationService';
 import { useAuth } from '../../contexts/AuthContext';
 import type { CandidateWithEvaluation } from '../../types/evaluation';
+import { ErrorHandler, NotificationService } from '../../utils/errorHandler';
 import '../../styles/evaluation.css';
 
 interface CandidateListProps {
@@ -33,6 +34,7 @@ export const CandidateList: React.FC<CandidateListProps> = ({
   const [candidates, setCandidates] = useState<CandidateWithEvaluation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reEvaluatingCandidates, setReEvaluatingCandidates] = useState<Set<string>>(new Set());
   const [expandedCandidateId, setExpandedCandidateId] = useState<string | null>(null);
   const [sortOption, setSortOption] = useState<SortOption>({
     field: 'overallScore',
@@ -165,7 +167,37 @@ export const CandidateList: React.FC<CandidateListProps> = ({
         c.id === candidate.id ? { ...c, evaluation } : c
       ));
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to trigger evaluation');
+      const appError = ErrorHandler.handleApiError(err, 'Trigger candidate evaluation');
+      NotificationService.showError(appError.message);
+    }
+  };
+
+  const handleReEvaluate = async (candidate: CandidateWithEvaluation) => {
+    if (!token || !candidate.evaluation) return;
+
+    try {
+      // Add candidate to re-evaluating set
+      setReEvaluatingCandidates(prev => new Set(prev).add(candidate.id));
+
+      // Call the re-evaluate API endpoint
+      const response = await evaluationService.reEvaluateExisting(candidate.evaluation.id, token);
+      
+      // Update the candidate with the new evaluation
+      setCandidates(prev => prev.map(c => 
+        c.id === candidate.id ? { ...c, evaluation: response.evaluation } : c
+      ));
+
+      NotificationService.showSuccess('Candidate re-evaluated successfully with improved AI!');
+    } catch (err) {
+      const appError = ErrorHandler.handleApiError(err, 'Re-evaluate candidate');
+      NotificationService.showError(appError.message);
+    } finally {
+      // Remove candidate from re-evaluating set
+      setReEvaluatingCandidates(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(candidate.id);
+        return newSet;
+      });
     }
   };
 
@@ -243,6 +275,8 @@ export const CandidateList: React.FC<CandidateListProps> = ({
               onExpand={() => handleCandidateExpand(candidate.id)}
               onClick={() => handleCandidateClick(candidate)}
               onTriggerEvaluation={() => handleTriggerEvaluation(candidate)}
+              onReEvaluate={() => handleReEvaluate(candidate)}
+              isReEvaluating={reEvaluatingCandidates.has(candidate.id)}
             />
           ))}
         </div>

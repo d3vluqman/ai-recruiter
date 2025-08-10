@@ -1,6 +1,7 @@
 .App {
-  text-align: center;
-  padding: 2rem;
+  min-height: 100vh;
+  width: 100%;
+  overflow-x: hidden;
 }
 
 .App-header {
@@ -52,6 +53,7 @@
   min-height: 100vh;
   background: #f8f9fa;
   padding: 20px;
+  width: 100%;
 }
 
 .dashboard-header {
@@ -80,8 +82,8 @@
   display: grid;
   grid-template-columns: 2fr 1fr;
   gap: 24px;
-  max-width: 1200px;
-  margin: 0 auto;
+  width: 100%;
+  max-width: none;
 }
 
 .dashboard-section {
@@ -153,6 +155,17 @@
 }
 
 /* Responsive Design */
+@media (min-width: 1400px) {
+  .dashboard-content {
+    grid-template-columns: 3fr 1fr;
+    gap: 32px;
+  }
+
+  .dashboard-header {
+    padding: 32px 40px;
+  }
+}
+
 @media (max-width: 768px) {
   .dashboard-content {
     grid-template-columns: 1fr;
@@ -168,5 +181,9 @@
 
   .action-cards {
     grid-template-columns: 1fr;
+  }
+
+  .dashboard-container {
+    padding: 10px;
   }
 }

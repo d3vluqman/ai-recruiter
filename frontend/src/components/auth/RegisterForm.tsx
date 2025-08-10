@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import type { RegisterRequest, Organization } from '../../types/auth';
+import { ErrorHandler } from '../../utils/errorHandler';
 
 interface RegisterFormProps {
   onSuccess?: () => void;
@@ -30,7 +31,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, onSwitchT
         // For now, we'll skip this and allow manual organization creation later
         setOrganizations([]);
       } catch (err) {
-        console.error('Failed to load organizations:', err);
+        ErrorHandler.logError(err, 'Load organizations for registration');
       } finally {
         setLoadingOrgs(false);
       }

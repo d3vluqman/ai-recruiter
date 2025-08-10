@@ -9,6 +9,8 @@ interface CandidateCardProps {
   onExpand: () => void;
   onClick: () => void;
   onTriggerEvaluation: () => void;
+  onReEvaluate?: () => void;
+  isReEvaluating?: boolean;
 }
 
 export const CandidateCard: React.FC<CandidateCardProps> = ({
@@ -17,6 +19,8 @@ export const CandidateCard: React.FC<CandidateCardProps> = ({
   onExpand,
   onClick,
   onTriggerEvaluation,
+  onReEvaluate,
+  isReEvaluating = false,
 }) => {
   const formatDate = (date: Date): string => {
     return new Date(date).toLocaleDateString('en-US', {
@@ -93,6 +97,19 @@ export const CandidateCard: React.FC<CandidateCardProps> = ({
                   size="small"
                 />
               </div>
+              {onReEvaluate && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onReEvaluate();
+                  }}
+                  disabled={isReEvaluating}
+                  className="btn btn-secondary btn-small re-evaluate-btn"
+                  title="Re-evaluate with improved AI"
+                >
+                  {isReEvaluating ? 'Re-evaluating...' : 'Re-evaluate'}
+                </button>
+              )}
             </div>
           ) : (
             <div className="no-evaluation">

@@ -326,6 +326,48 @@ export class EvaluationController {
       });
     }
   }
+  async reEvaluateExisting(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+
+      // Get the existing evaluation
+      const existingEvaluation = await evaluationService.getEvaluationById(id);
+      if (!existingEvaluation) {
+        return res.status(404).json({
+          error: "Evaluation not found",
+        });
+      }
+
+      logger.info(`Re-evaluating existing evaluation ${id}`);
+
+      // Create a new evaluation with the same resume and job posting
+      const newEvaluation = await evaluationService.createEvaluation({
+        resumeId: existingEvaluation.resumeId,
+        jobPostingId: existingEvaluation.jobPostingId,
+        weights: undefined, // Use default weights
+      });
+
+      // Delete the old evaluation
+      await evaluationService.deleteEvaluation(id);
+
+      logger.info(
+        `Successfully re-evaluated evaluation ${id} -> ${newEvaluation.id}`
+      );
+
+      res.json({
+        message: "Evaluation re-run successfully",
+        oldEvaluationId: id,
+        newEvaluationId: newEvaluation.id,
+        evaluation: newEvaluation,
+      });
+    } catch (error) {
+      logger.error("EvaluationController.reEvaluateExisting error:", error);
+      res.status(500).json({
+        error: "Failed to re-evaluate",
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }
 }
 
 export const evaluationController = new EvaluationController();

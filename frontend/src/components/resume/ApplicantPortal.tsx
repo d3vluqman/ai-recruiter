@@ -3,6 +3,8 @@ import { useParams } from 'react-router-dom';
 import { resumeService } from '../../services/resumeService';
 import { jobPostingService } from '../../services/jobPostingService';
 import type { JobPosting } from '../../types/jobPosting';
+import { ErrorHandler, NotificationService } from '../../utils/errorHandler';
+import { FILE_UPLOAD, ERROR_MESSAGES } from '../../config/constants';
 import '../../styles/resume.css';
 
 interface FormData {
@@ -44,7 +46,7 @@ export const ApplicantPortal: React.FC = () => {
         const job = await jobPostingService.getJobPostingById(jobId);
         setJobPosting(job);
       } catch (error) {
-        console.error('Error fetching job posting:', error);
+        ErrorHandler.logError(error, 'Fetch job posting for application');
         setSubmitError('Job posting not found or no longer available.');
       } finally {
         setLoading(false);
@@ -74,11 +76,10 @@ export const ApplicantPortal: React.FC = () => {
     if (!formData.resume) {
       newErrors.resume = 'Resume file is required';
     } else {
-      const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'];
-      if (!allowedTypes.includes(formData.resume.type)) {
-        newErrors.resume = 'Please upload a PDF, DOC, DOCX, or TXT file';
-      } else if (formData.resume.size > 10 * 1024 * 1024) {
-        newErrors.resume = 'File size must be less than 10MB';
+      if (!FILE_UPLOAD.ALLOWED_TYPES.includes(formData.resume.type)) {
+        newErrors.resume = ERROR_MESSAGES.INVALID_FILE_TYPE;
+      } else if (formData.resume.size > FILE_UPLOAD.MAX_SIZE_BYTES) {
+        newErrors.resume = ERROR_MESSAGES.FILE_TOO_LARGE;
       }
     }
 
@@ -301,7 +302,7 @@ export const ApplicantPortal: React.FC = () => {
               disabled={isSubmitting}
             />
             <div className="file-help">
-              Accepted formats: PDF, DOC, DOCX, TXT (Max size: 10MB)
+              Accepted formats: {FILE_UPLOAD.ALLOWED_EXTENSIONS.join(', ')} (Max size: {FILE_UPLOAD.MAX_SIZE_DISPLAY})
             </div>
             {errors.resume && (
               <span className="error-text">{errors.resume}</span>

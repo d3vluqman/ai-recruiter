@@ -1,5 +1,7 @@
 import React, { useState, useRef } from 'react';
 import type { CreateJobPostingData, UpdateJobPostingData, JobPosting } from '../../types/jobPosting';
+import { ErrorHandler, NotificationService } from '../../utils/errorHandler';
+import { FILE_UPLOAD, ERROR_MESSAGES } from '../../config/constants';
 
 interface JobPostingFormProps {
   initialData?: JobPosting;
@@ -57,20 +59,13 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({
   };
 
   const handleFileSelect = (file: File) => {
-    const allowedTypes = [
-      'application/pdf',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'text/plain',
-    ];
-
-    if (!allowedTypes.includes(file.type)) {
-      alert('Please select a PDF, DOC, DOCX, or TXT file.');
+    if (!FILE_UPLOAD.ALLOWED_TYPES.includes(file.type)) {
+      NotificationService.showError(ERROR_MESSAGES.INVALID_FILE_TYPE);
       return;
     }
 
-    if (file.size > 10 * 1024 * 1024) { // 10MB
-      alert('File size must be less than 10MB.');
+    if (file.size > FILE_UPLOAD.MAX_SIZE_BYTES) {
+      NotificationService.showError(ERROR_MESSAGES.FILE_TOO_LARGE);
       return;
     }
 
@@ -107,7 +102,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({
     e.preventDefault();
 
     if (!formData.title.trim() || !formData.description.trim()) {
-      alert('Please fill in all required fields.');
+      NotificationService.showError(ERROR_MESSAGES.REQUIRED_FIELDS);
       return;
     }
 
@@ -121,9 +116,12 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({
 
     try {
       await onSubmit(submitData);
+      NotificationService.showSuccess(
+        initialData ? 'Job posting updated successfully!' : 'Job posting created successfully!'
+      );
     } catch (error) {
-      console.error('Error submitting job posting:', error);
-      alert('Failed to save job posting. Please try again.');
+      const appError = ErrorHandler.handleApiError(error, 'Job posting submission');
+      NotificationService.showError(appError.message);
     }
   };
 
@@ -294,7 +292,7 @@ export const JobPostingForm: React.FC<JobPostingFormProps> = ({
                 <p>
                   <strong>Click to upload</strong> or drag and drop
                 </p>
-                <p className="file-types">PDF, DOC, DOCX, or TXT (max 10MB)</p>
+                <p className="file-types">{FILE_UPLOAD.ALLOWED_EXTENSIONS.join(', ')} (max {FILE_UPLOAD.MAX_SIZE_DISPLAY})</p>
               </div>
             )}
           </div>

@@ -424,7 +424,7 @@ describe("EvaluationService", () => {
       );
 
       expect(evaluations).toHaveLength(1);
-      expect(evaluations[0].id).toBe("eval-1");
+      expect(evaluations.evaluations[0].id).toBe("eval-1");
     });
   });
 

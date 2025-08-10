@@ -1,11 +1,11 @@
-import { createWriteStream, existsSync, mkdirSync } from 'fs';
-import { join } from 'path';
+import { createWriteStream, existsSync, mkdirSync } from "fs";
+import { join } from "path";
 
 export enum LogLevel {
-  ERROR = 'ERROR',
-  WARN = 'WARN',
-  INFO = 'INFO',
-  DEBUG = 'DEBUG'
+  ERROR = "ERROR",
+  WARN = "WARN",
+  INFO = "INFO",
+  DEBUG = "DEBUG",
 }
 
 class Logger {
@@ -13,9 +13,9 @@ class Logger {
   private logFile: string;
 
   constructor() {
-    this.logDir = join(process.cwd(), 'logs');
-    this.logFile = join(this.logDir, 'app.log');
-    
+    this.logDir = join(process.cwd(), "logs");
+    this.logFile = join(this.logDir, "app.log");
+
     // Create logs directory if it doesn't exist
     if (!existsSync(this.logDir)) {
       mkdirSync(this.logDir, { recursive: true });
@@ -24,26 +24,27 @@ class Logger {
 
   private formatMessage(level: LogLevel, message: string, meta?: any): string {
     const timestamp = new Date().toISOString();
-    const metaStr = meta ? ` ${JSON.stringify(meta)}` : '';
+    const metaStr = meta ? ` ${JSON.stringify(meta)}` : "";
     return `[${timestamp}] ${level}: ${message}${metaStr}\n`;
   }
 
   private writeToFile(message: string): void {
     try {
-      const stream = createWriteStream(this.logFile, { flags: 'a' });
+      const stream = createWriteStream(this.logFile, { flags: "a" });
       stream.write(message);
       stream.end();
     } catch (error) {
-      console.error('Failed to write to log file:', error);
+      // Fallback to console if file writing fails
+      console.error("Failed to write to log file:", error);
     }
   }
 
   private log(level: LogLevel, message: string, meta?: any): void {
     const formattedMessage = this.formatMessage(level, message, meta);
-    
+
     // Write to console
     console.log(formattedMessage.trim());
-    
+
     // Write to file
     this.writeToFile(formattedMessage);
   }
@@ -61,7 +62,7 @@ class Logger {
   }
 
   debug(message: string, meta?: any): void {
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === "development") {
       this.log(LogLevel.DEBUG, message, meta);
     }
   }

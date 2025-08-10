@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { resumeService } from '../../services/resumeService';
 import type { ResumeWithCandidate } from '../../types/resume';
 import { useAuth } from '../../contexts/AuthContext';
+import { ErrorHandler, NotificationService } from '../../utils/errorHandler';
 import '../../styles/resume.css';
 
 interface ResumeManagementProps {
@@ -52,7 +53,8 @@ export const ResumeManagement: React.FC<ResumeManagementProps> = ({ jobPostingId
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to download resume');
+      const appError = ErrorHandler.handleApiError(err, 'Download resume');
+      NotificationService.showError(appError.message);
     }
   };
 
@@ -64,7 +66,8 @@ export const ResumeManagement: React.FC<ResumeManagementProps> = ({ jobPostingId
       await resumeService.deleteResume(resumeId, token);
       setResumes(prev => prev.filter(r => r.id !== resumeId));
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete resume');
+      const appError = ErrorHandler.handleApiError(err, 'Delete resume');
+      NotificationService.showError(appError.message);
     } finally {
       setDeletingId(null);
     }
@@ -79,7 +82,8 @@ export const ResumeManagement: React.FC<ResumeManagementProps> = ({ jobPostingId
         r.id === resumeId ? { ...r, status: newStatus } : r
       ));
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to update resume status');
+      const appError = ErrorHandler.handleApiError(err, 'Update resume status');
+      NotificationService.showError(appError.message);
     }
   };
 

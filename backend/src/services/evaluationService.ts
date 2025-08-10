@@ -142,7 +142,7 @@ export class EvaluationService {
         throw new Error(`Failed to create evaluation: ${error.message}`);
       }
 
-      const evaluation = this.mapDatabaseToEvaluation(data);
+      const evaluation = await this.mapDatabaseToEvaluation(data);
 
       // Store skill matches separately
       if (mlResult.skill_matches && mlResult.skill_matches.length > 0) {
@@ -187,7 +187,7 @@ export class EvaluationService {
         throw new Error(`Failed to fetch evaluation: ${error.message}`);
       }
 
-      const evaluation = this.mapDatabaseToEvaluation(data);
+      const evaluation = await this.mapDatabaseToEvaluation(data);
 
       // Cache the result for 1 hour
       await cacheService.set(cacheKey, evaluation, { ttl: 3600 });
@@ -251,7 +251,9 @@ export class EvaluationService {
         throw new Error(`Failed to fetch evaluations: ${error.message}`);
       }
 
-      const evaluations = data.map(this.mapDatabaseToEvaluation);
+      const evaluations = await Promise.all(
+        data.map((d) => this.mapDatabaseToEvaluation(d))
+      );
       const hasMore = offset + limit < total;
 
       const result = { evaluations, total, hasMore };
@@ -291,7 +293,7 @@ export class EvaluationService {
         throw new Error(`Failed to fetch evaluation: ${error.message}`);
       }
 
-      return this.mapDatabaseToEvaluation(data);
+      return await this.mapDatabaseToEvaluation(data);
     } catch (error) {
       logger.error(
         "EvaluationService.getEvaluationByResumeAndJob error:",
@@ -462,28 +464,30 @@ export class EvaluationService {
       }
 
       // Combine the data
-      const candidates = resumesData.map((resume: any) => {
-        const evaluation = evaluationsData.find(
-          (evalData: any) => evalData.resume_id === resume.id
-        );
+      const candidates = await Promise.all(
+        resumesData.map(async (resume: any) => {
+          const evaluation = evaluationsData.find(
+            (evalData: any) => evalData.resume_id === resume.id
+          );
 
-        return {
-          id: resume.candidates.id,
-          firstName: resume.candidates.first_name,
-          lastName: resume.candidates.last_name,
-          email: resume.candidates.email,
-          phone: resume.candidates.phone,
-          resume: {
-            id: resume.id,
-            fileName: resume.file_name,
-            uploadedAt: new Date(resume.uploaded_at),
-            source: resume.source,
-          },
-          evaluation: evaluation
-            ? this.mapDatabaseToEvaluation(evaluation)
-            : undefined,
-        };
-      });
+          return {
+            id: resume.candidates.id,
+            firstName: resume.candidates.first_name,
+            lastName: resume.candidates.last_name,
+            email: resume.candidates.email,
+            phone: resume.candidates.phone,
+            resume: {
+              id: resume.id,
+              fileName: resume.file_name,
+              uploadedAt: new Date(resume.uploaded_at),
+              source: resume.source,
+            },
+            evaluation: evaluation
+              ? await this.mapDatabaseToEvaluation(evaluation)
+              : undefined,
+          };
+        })
+      );
 
       return candidates;
     } catch (error) {
@@ -534,6 +538,47 @@ export class EvaluationService {
     weights?: { skills: number; experience: number; education: number }
   ): Promise<any> {
     try {
+      // NEW: Use hybrid approach with Gemini parsing
+      const resumeData = await this.parseResumeWithGemini(resume);
+      const jobRequirements = await this.parseJobPostingWithGemini(jobPosting);
+
+      // Check if ML service is healthy for evaluation (not parsing)
+      const isHealthy = await mlServiceFallbackHandler.checkServiceHealth();
+
+      if (!isHealthy && mlServiceFallbackHandler.shouldUseFallback()) {
+        logger.warn(
+          "ML service unavailable, using fallback evaluation with Gemini-parsed data"
+        );
+        return mlServiceFallbackHandler.generateFallbackEvaluation(
+          resumeData,
+          jobRequirements
+        );
+      }
+
+      // Use ML service for evaluation with Gemini-parsed data
+      const result = await mlServiceClient.evaluateCandidate(
+        resumeData,
+        jobRequirements,
+        weights
+      );
+
+      return result;
+    } catch (error) {
+      logger.error("Hybrid evaluation call failed:", error);
+
+      // Fallback to original method if Gemini fails
+      logger.warn("Falling back to original parsing and evaluation");
+      return this.callOriginalMLEvaluationService(resume, jobPosting, weights);
+    }
+  }
+
+  // Keep original method as fallback
+  private async callOriginalMLEvaluationService(
+    resume: Resume,
+    jobPosting: JobPosting,
+    weights?: { skills: number; experience: number; education: number }
+  ): Promise<any> {
+    try {
       // Check if ML service is healthy
       const isHealthy = await mlServiceFallbackHandler.checkServiceHealth();
 
@@ -560,7 +605,7 @@ export class EvaluationService {
 
       return result;
     } catch (error) {
-      logger.error("ML service evaluation call failed:", error);
+      logger.error("Original ML service evaluation call failed:", error);
 
       // Try fallback if enabled
       if (mlServiceFallbackHandler.shouldUseFallback()) {
@@ -575,6 +620,166 @@ export class EvaluationService {
       }
 
       throw new Error("Failed to evaluate candidate using ML service");
+    }
+  }
+
+  // NEW: Parse resume using Gemini
+  private async parseResumeWithGemini(resume: Resume): Promise<any> {
+    try {
+      // DEBUG: Log what's actually in the resume data
+      logger.info(
+        `DEBUG: Resume ID ${resume.id}, parsedData keys: ${Object.keys(
+          resume.parsedData || {}
+        ).join(", ")}`
+      );
+      if (resume.parsedData) {
+        logger.info(
+          `DEBUG: parsedData.text length: ${
+            resume.parsedData.text?.length || 0
+          }`
+        );
+        logger.info(
+          `DEBUG: parsedData.extractedText length: ${
+            resume.parsedData.extractedText?.length || 0
+          }`
+        );
+        logger.info(
+          `DEBUG: parsedData.summary length: ${
+            resume.parsedData.summary?.length || 0
+          }`
+        );
+        logger.info(
+          `DEBUG: parsedData structure: ${JSON.stringify(
+            resume.parsedData,
+            null,
+            2
+          ).substring(0, 500)}...`
+        );
+      }
+
+      // Get the raw text from the resume - check different possible sources
+      let resumeText = "";
+
+      if (resume.parsedData?.text) {
+        resumeText = resume.parsedData.text;
+      } else if (resume.parsedData?.extractedText) {
+        resumeText = resume.parsedData.extractedText;
+      } else if (resume.parsedData?.summary) {
+        resumeText = resume.parsedData.summary;
+      } else if (resume.parsedData) {
+        // Try to reconstruct text from parsed data
+        const parts = [];
+        if (resume.parsedData.personal_info?.name)
+          parts.push(resume.parsedData.personal_info.name);
+        if (resume.parsedData.personal_info?.email)
+          parts.push(resume.parsedData.personal_info.email);
+        if (resume.parsedData.skills?.length)
+          parts.push("Skills: " + resume.parsedData.skills.join(", "));
+        if (resume.parsedData.experience?.length) {
+          parts.push("Experience:");
+          resume.parsedData.experience.forEach((exp: any) => {
+            if (exp.job_title && exp.company) {
+              parts.push(`${exp.job_title} at ${exp.company}`);
+            }
+          });
+        }
+        resumeText = parts.join("\n");
+      }
+
+      logger.info(`DEBUG: Final resumeText length: ${resumeText.length}`);
+      logger.info(
+        `DEBUG: First 200 chars of resumeText: "${resumeText.substring(
+          0,
+          200
+        )}"`
+      );
+
+      // If no text available from parsed data, try to extract directly from file
+      if (!resumeText || resumeText.length < 50) {
+        logger.info(
+          `No parsed text available, attempting to extract directly from file: ${resume.filePath}`
+        );
+        try {
+          const { documentParser } = await import("../utils/documentParser");
+          resumeText = await documentParser.extractText(resume.filePath);
+          logger.info(
+            `Successfully extracted ${resumeText.length} characters from file`
+          );
+        } catch (fileError) {
+          logger.error(
+            `Failed to extract text from file ${resume.filePath}:`,
+            fileError
+          );
+          logger.warn("Falling back to existing parsed data");
+          return MLServiceClient.convertResumeToMLFormat(resume);
+        }
+      }
+
+      if (!resumeText || resumeText.length < 50) {
+        logger.warn(
+          `Still insufficient resume text available (${resumeText.length} chars), falling back to existing parsed data`
+        );
+        return MLServiceClient.convertResumeToMLFormat(resume);
+      }
+
+      logger.info(
+        `Using Gemini to parse resume text (${resumeText.length} characters)`
+      );
+
+      // Use Gemini to parse the resume text
+      const geminiParsedData = await mlServiceClient.parseResumeTextWithGemini(
+        resumeText
+      );
+
+      logger.info("Successfully parsed resume with Gemini");
+      return geminiParsedData;
+    } catch (error) {
+      logger.error("Failed to parse resume with Gemini:", error);
+      // Fallback to existing parsed data
+      return MLServiceClient.convertResumeToMLFormat(resume);
+    }
+  }
+
+  // NEW: Parse job posting using Gemini
+  private async parseJobPostingWithGemini(
+    jobPosting: JobPosting
+  ): Promise<any> {
+    try {
+      // Get the raw text from the job posting, combining description and requirements
+      let jobText = jobPosting.description || "";
+
+      // Add requirements if they exist
+      if (jobPosting.requirements && jobPosting.requirements.length > 0) {
+        jobText += "\n\nRequirements:\n" + jobPosting.requirements.join("\n");
+      }
+
+      if (!jobText.trim()) {
+        logger.warn(
+          "No job description or requirements text available, falling back to existing parsed data"
+        );
+        return MLServiceClient.convertJobPostingToMLFormat(jobPosting);
+      }
+
+      // Debug logging for complete job text
+      logger.info("DEBUG: Complete job text being sent to Gemini:", {
+        description_length: jobPosting.description?.length || 0,
+        requirements_count: jobPosting.requirements?.length || 0,
+        total_text_length: jobText.length,
+        contains_experience: jobText.toLowerCase().includes("experience"),
+        contains_years: jobText.toLowerCase().includes("year"),
+        contains_degree: jobText.toLowerCase().includes("degree"),
+      });
+
+      // Use Gemini to parse the job description
+      const geminiParsedData =
+        await mlServiceClient.parseJobDescriptionTextWithGemini(jobText);
+
+      logger.info("Successfully parsed job posting with Gemini");
+      return geminiParsedData;
+    } catch (error) {
+      logger.error("Failed to parse job posting with Gemini:", error);
+      // Fallback to existing parsed data
+      return MLServiceClient.convertJobPostingToMLFormat(jobPosting);
     }
   }
 
@@ -666,7 +871,7 @@ export class EvaluationService {
         throw new Error(`Failed to store evaluation: ${error.message}`);
       }
 
-      const evaluation = this.mapDatabaseToEvaluation(data);
+      const evaluation = await this.mapDatabaseToEvaluation(data);
 
       // Store skill matches
       if (mlResult.skill_matches && mlResult.skill_matches.length > 0) {
@@ -728,7 +933,28 @@ export class EvaluationService {
     }
   }
 
-  private mapDatabaseToEvaluation(data: any): Evaluation {
+  private async mapDatabaseToEvaluation(data: any): Promise<Evaluation> {
+    // Load skill matches from separate table
+    const { data: skillMatchesData, error: skillMatchesError } = await supabase
+      .from("skill_matches")
+      .select("*")
+      .eq("evaluation_id", data.id);
+
+    if (skillMatchesError) {
+      logger.error("Error loading skill matches:", skillMatchesError);
+    }
+
+    // Transform skill matches to frontend format
+    const skillMatches = (skillMatchesData || []).map((sm: any) => ({
+      skillName: sm.skill_name,
+      required: sm.required,
+      matched: sm.matched,
+      confidenceScore: sm.confidence_score || 0,
+      similarityScore: sm.similarity_score || sm.confidence_score || 0,
+    }));
+
+    const evaluationDetails = data.evaluation_details || {};
+
     return {
       id: data.id,
       resumeId: data.resume_id,
@@ -737,22 +963,23 @@ export class EvaluationService {
       skillScore: parseFloat(data.skill_score),
       experienceScore: parseFloat(data.experience_score),
       educationScore: parseFloat(data.education_score),
-      evaluationDetails: data.evaluation_details || {
-        skillMatches: [],
-        experienceMatch: {
+      evaluationDetails: {
+        skillMatches, // Use loaded skill matches instead of empty array
+        experienceMatch: evaluationDetails.experienceMatch || {
           totalYears: 0,
           relevantYears: 0,
           experienceScore: 0,
           relevantPositions: [],
         },
-        educationMatch: {
+        educationMatch: evaluationDetails.educationMatch || {
           degreeMatch: false,
           fieldMatch: false,
           educationScore: 0,
           matchedDegrees: [],
         },
-        gapAnalysis: [],
-        recommendations: [],
+        gapAnalysis: evaluationDetails.gapAnalysis || [],
+        recommendations: evaluationDetails.recommendations || [],
+        evaluationSummary: evaluationDetails.evaluationSummary,
       },
       status: data.status,
       evaluatedAt: new Date(data.evaluated_at),

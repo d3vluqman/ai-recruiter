@@ -32,7 +32,7 @@ export interface MLServiceHealth {
 }
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+  (import.meta.env.VITE_API_BASE_URL || "http://localhost:3001") + "/api";
 
 export class EvaluationService {
   async createEvaluation(
@@ -265,6 +265,33 @@ export class EvaluationService {
       throw new Error(
         errorData.error?.message || "Failed to check ML service health"
       );
+    }
+
+    return response.json();
+  }
+  async reEvaluateExisting(
+    evaluationId: string,
+    token: string
+  ): Promise<{
+    message: string;
+    oldEvaluationId: string;
+    newEvaluationId: string;
+    evaluation: Evaluation;
+  }> {
+    const response = await fetch(
+      `${API_BASE_URL}/evaluations/re-evaluate/${evaluationId}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || "Failed to re-evaluate candidate");
     }
 
     return response.json();

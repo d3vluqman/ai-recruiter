@@ -14,8 +14,12 @@ class JobDescriptionParser:
         # Load spaCy model
         try:
             self.nlp = spacy.load("en_core_web_sm")
+            logger.info("Successfully loaded spaCy model 'en_core_web_sm'")
         except OSError:
-            logger.warning("spaCy model 'en_core_web_sm' not found. Using blank model.")
+            logger.error(
+                "spaCy model 'en_core_web_sm' not found. Install with: python -m spacy download en_core_web_sm"
+            )
+            logger.warning("Using blank model - NLP features will be limited")
             self.nlp = spacy.blank("en")
 
         # Load patterns and keywords
