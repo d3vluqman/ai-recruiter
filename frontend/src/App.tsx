@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
+import { LandingPage } from './pages/LandingPage';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { JobPostingsPage } from './pages/JobPostingsPage';
@@ -15,6 +16,9 @@ function App() {
       <AuthProvider>
         <div className="App">
           <Routes>
+            {/* Landing page - public route */}
+            <Route path="/" element={<LandingPage />} />
+            
             {/* Public routes */}
             <Route path="/login" element={<LoginPage />} />
             
@@ -55,11 +59,8 @@ function App() {
             {/* Public applicant portal routes */}
             <Route path="/apply/:jobId" element={<ApplicantPortal />} />
             
-            {/* Default redirect */}
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            
-            {/* Catch all - redirect to login */}
-            <Route path="*" element={<Navigate to="/login" replace />} />
+            {/* Catch all - redirect to landing page */}
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>
       </AuthProvider>
