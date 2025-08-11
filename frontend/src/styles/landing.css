@@ -181,7 +181,7 @@
   gap: 1rem;
 }
 
-.score-circle {
+.landing-page .score-circle {
   width: 50px;
   height: 50px;
   border-radius: 50%;
@@ -192,7 +192,7 @@
   position: relative;
 }
 
-.score-circle::before {
+.landing-page .score-circle::before {
   content: "";
   position: absolute;
   width: 36px;
@@ -201,7 +201,7 @@
   border-radius: 50%;
 }
 
-.score-circle span {
+.landing-page .score-circle span {
   position: relative;
   z-index: 1;
   font-size: 0.8rem;
