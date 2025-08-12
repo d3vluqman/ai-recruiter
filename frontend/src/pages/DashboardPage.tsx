@@ -51,13 +51,6 @@ export const DashboardPage: React.FC = () => {
                 Evaluate Candidates
               </button>
             </div>
-            <div className="action-card">
-              <h3>Reports</h3>
-              <p>View recruitment analytics</p>
-              <button className="action-button" disabled>
-                Coming Soon
-              </button>
-            </div>
           </div>
         </div>
 
